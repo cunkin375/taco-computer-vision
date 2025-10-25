@@ -3,3 +3,6 @@ __pycache__/main.cpython-313.pyc
 runs/detect/predict/0.avi
 runs/detect/predict2/2.avi
 runs/detect/predict3/2.avi
+yolov8n.pt
+__pycache__/classes.cpython-313.pyc
+__pycache__/webcam.cpython-313.pyc

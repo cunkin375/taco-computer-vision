@@ -1,9 +1,14 @@
 import argparse
 import cv2
 import os
+import robot
 
 import supervision as sv
 from ultralytics import YOLO
+
+# DAVID TEST CODE
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="YOLOv8 Video Capture")
@@ -14,11 +19,29 @@ def parse_args():
         nargs = 2,
         help = 'Webcam resolution width height'
     )
+    parser.add_argument(
+        '--target_object',
+        default=None,
+        type=str,
+        help='Object name to track (must match a class in names.txt, e.g. "cup", "bottle", "person")'
+    )
+    parser.add_argument(
+        '--center_threshold',
+        default=0.2,
+        type=float,
+        help='Fraction of frame width for center zone (default: 0.2 = 20%% of width centered)'
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     frame_width, frame_height = args.webcam_resolution
+    frame_center_x = frame_width / 2
+    
+    # Calculate center zone boundaries
+    center_zone_width = frame_width * args.center_threshold
+    center_left = frame_center_x - (center_zone_width / 2)
+    center_right = frame_center_x + (center_zone_width / 2)
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
@@ -41,20 +64,18 @@ def main():
         if not ret or frame is None:
             print("Failed to read frame from camera, stopping")
             break
-
         # run yolo model on the frame (keep as color BGR input for YOLO)
         result = model(frame)[0]
-
         # convert to grayscale for the Haar cascade detector
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
         objects, reject_levels, confidence_levels = cascade.detectMultiScale3(
-            gray, scaleFactor=1.1, minNeighbors=3, outputRejectLevels=True
+            gray, 
+            scaleFactor = 1.1, 
+            minNeighbors = 3, 
+            outputRejectLevels = True
         )
-
         # Draw bounding boxes on a copy of the frame
         out = frame.copy()
-
         # Draw YOLO boxes (support multiple result shapes/backends)
         try:
             xyxy = result.boxes.xyxy.cpu().numpy()
@@ -105,10 +126,34 @@ def main():
             elif conf_i is not None:
                 label = f"{conf_i:.2f}"
 
+            # Check if this detection matches the target object
+            if args.target_object and cls_i is not None:
+                detected_name = model.names.get(cls_i, '').lower() if hasattr(model, 'names') else ''
+                if detected_name == args.target_object.lower():
+                    # Calculate overlap between bounding box and center zone
+                    # Find the intersection between bbox [x1, x2] and center zone [center_left, center_right]
+                    overlap_left = max(x1, center_left)
+                    overlap_right = min(x2, center_right)
+                    overlap_width = max(0, overlap_right - overlap_left)
+                    
+                    bbox_width = x2 - x1
+                    overlap_fraction = overlap_width / bbox_width if bbox_width > 0 else 0
+                    
+                    # If majority (>50%) of bbox is within center zone, it's centered
+                    if overlap_fraction > 0.5:
+                        print("Centered")
+                    else:
+                        # Calculate bounding box center for left/right determination
+                        bbox_center_x = (x1 + x2) / 2
+                        
+                        if bbox_center_x < center_left:
+                            print("Look left")
+                        else:
+                            print("Look right")
+
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
             if label:
                 cv2.putText(out, label, (x1, max(10, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
         # Draw Haar cascade face detections (objects is typically an array of rects)
         try:
             for rect in objects:
@@ -119,13 +164,18 @@ def main():
         except Exception:
             # ignore drawing errors
             pass
-
         # Show the annotated frame
         cv2.imshow('Video Feed', out)
 
         # exit on 'q' key
         if cv2.waitKey(27) & 0xFF == ord('q'):
             break
+    # end main loop
+    cap.release()
+
+
+
+        
 
 if __name__ == "__main__":
     try:

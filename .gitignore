@@ -6,3 +6,4 @@ runs/detect/predict3/2.avi
 yolov8n.pt
 __pycache__/classes.cpython-313.pyc
 __pycache__/webcam.cpython-313.pyc
+__pycache__/robot.cpython-313.pyc

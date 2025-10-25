@@ -1,0 +1,5 @@
+yolov8l.pt
+__pycache__/main.cpython-313.pyc
+runs/detect/predict/0.avi
+runs/detect/predict2/2.avi
+runs/detect/predict3/2.avi

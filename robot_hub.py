@@ -50,8 +50,10 @@ def calibrate():
     print("Testing base rotation...")
     motor_base.run_target(SPEED, 45, Stop.HOLD, wait=True)
     wait(500)
+    print("Testing base rotation2...")
     motor_base.run_target(SPEED, -45, Stop.HOLD, wait=True)
     wait(500)
+    print("Testing base rotation3...")
     motor_base.run_target(SPEED, 0, Stop.HOLD, wait=True)
     wait(500)
     
@@ -117,10 +119,11 @@ def move_shoulder(delta):
 calibrate()
 
 # ---- Command listener loop ----
-print("🎯 Robot ready! Waiting for camera commands...")
+print("Robot ready! Waiting for camera commands...")
 print("Hub will stay connected. Press Ctrl+C on the PC to stop.")
 print("Listening for commands via stdin (format: MOTOR:DEGREES, e.g., BASE:5 or SHOULDER:-5)")
 
+"""
 # Keep the program running and listen for commands from stdin
 try:
     while True:
@@ -136,9 +139,10 @@ try:
         # when pybricksdev adds better support for it
         
 except KeyboardInterrupt:
-    print("\n🛑 Stopping robot...")
+    print("\nStopping robot...")
     motor_base.stop()
     motor_shoulder.stop()
     motor_elbow.stop()
     motor_gripper.stop()
-    print("✅ Robot stopped")
+    print("Robot stopped")
+"""

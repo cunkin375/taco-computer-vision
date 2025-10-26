@@ -5,6 +5,40 @@ import os
 import supervision as sv
 from ultralytics import YOLO
 
+from pybricks.hubs import InventorHub
+from pybricks.pupdevices import Motor
+from pybricks.parameters import Port, Stop
+from pybricks.tools import wait
+
+# ---- Initialize hub ----
+hub = InventorHub()
+
+# ---- Motors ----
+motor_base = Motor(Port.A)
+motor_shoulder = Motor(Port.B)
+motor_elbow = Motor(Port.C)
+motor_gripper = Motor(Port.F)
+
+# ---- Settings ----
+SPEED = 200
+
+# ---- Motor bounds (degrees) ----
+SHOULDER_MIN = 0
+SHOULDER_MAX = 90
+BASE_MIN = -90
+BASE_MAX = 90
+
+# ---- Global state ----
+current_shoulder_angle = 0
+current_base_angle = 0
+
+# ---- Reset angles ----
+motor_base.reset_angle(0)
+motor_shoulder.reset_angle(0)
+motor_elbow.reset_angle(0)
+motor_gripper.reset_angle(0)
+
+
 # DAVID TEST CODE
 
 
@@ -171,11 +205,13 @@ def main():
                             if robot_controller:
                                 # Send command that robot can receive
                                 print(f"ROBOT_CMD:SHOULDER:{-args.movement_step}")
+                                motor_shoulder.run_target(SPEED, -args.movement_step, Stop.HOLD, wait=True)
                         else:
                             print("Look right")
                             if robot_controller:
                                 # Send command that robot can receive
                                 print(f"ROBOT_CMD:SHOULDER:{args.movement_step}")
+                                motor_shoulder.run_target(SPEED, args.movement, Stop.HOLD, wait=True)
 
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
             if label:

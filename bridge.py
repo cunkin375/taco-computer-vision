@@ -41,7 +41,7 @@ def read_output(pipe, output_queue, prefix=""):
 def start_robot(robot_name):
     """Start robot hub program via pybricksdev."""
     print("\n" + "="*60)
-    print("🤖 STEP 1: Starting robot hub...")
+    print("Starting robot hub...")
     print("="*60)
     
     cmd = [
@@ -109,7 +109,7 @@ def start_robot(robot_name):
 def start_camera(args):
     """Start camera tracking script."""
     print("\n" + "="*60)
-    print("📷 STEP 2: Starting camera tracking...")
+    print("Starting camera tracking...")
     print("="*60)
     print(f"Target: {args.target_object}")
     print(f"Movement step: {args.movement_step}°")
@@ -211,22 +211,29 @@ def main():
         print("="*70)
         print("\nMonitoring camera output and sending commands to robot...")
         print("Press 'q' in the video window or Ctrl+C here to stop\n")
+
+        print("Here1!!!!")
         
         # Main loop: process output from both queues
         command_count = 0
         last_command_time = 0
         MIN_COMMAND_INTERVAL = 0.3  # Minimum seconds between commands (debouncing)
+
+        print("Here2!!!!")
         
         while True:
             # Check camera output
             if camera_queue:
+                print("Here3!!!!")
                 try:
                     while not camera_queue.empty():
+                        print("Here4!!!!")
                         prefix, line = camera_queue.get_nowait()
                         print(f"[{prefix}] {line}")
                         
                         # Parse robot commands
                         match = re.match(r'ROBOT_CMD:(\w+):(-?\d+)', line)
+                       
                         if match:
                             motor = match.group(1)
                             degrees = int(match.group(2))

@@ -1,0 +1,7 @@
+google-generativeai
+elevenlabs
+pyaudio
+websockets
+aiohttp
+python-dotenv
+sounddevice

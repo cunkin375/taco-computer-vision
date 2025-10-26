@@ -37,7 +37,7 @@ def move_motor_by(motor, delta, min_angle, max_angle):
     motor.run_target(SPEED, target_angle, Stop.HOLD, wait=True)
 
 # ---- Execute one command ----
-cmd = "STOP".strip()
+cmd = "SHOULDER_UP".strip()
 print("Executing command:", cmd)
 try:
     if cmd.upper() == 'SHOULDER_UP':

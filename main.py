@@ -4,44 +4,14 @@ import os
 
 import supervision as sv
 from ultralytics import YOLO
+import subprocess
+import threading
+import queue
+import sys
+import time
 
-from pybricks.hubs import InventorHub
-from pybricks.pupdevices import Motor
-from pybricks.parameters import Port, Stop
-from pybricks.tools import wait
-
-# ---- Initialize hub ----
-hub = InventorHub()
-
-# ---- Motors ----
-motor_base = Motor(Port.A)
-motor_shoulder = Motor(Port.B)
-motor_elbow = Motor(Port.C)
-motor_gripper = Motor(Port.F)
-
-# ---- Settings ----
-SPEED = 200
-
-# ---- Motor bounds (degrees) ----
-SHOULDER_MIN = 0
-SHOULDER_MAX = 90
-BASE_MIN = -90
-BASE_MAX = 90
-
-# ---- Global state ----
-current_shoulder_angle = 0
-current_base_angle = 0
-
-# ---- Reset angles ----
-motor_base.reset_angle(0)
-motor_shoulder.reset_angle(0)
-motor_elbow.reset_angle(0)
-motor_gripper.reset_angle(0)
-
-
-# DAVID TEST CODE
-
-
+# Absolute path to the shared commands file (PC-side queue)
+COMMANDS_FILE_PATH = r"C:\\Users\\hackathon\\dev\\taco\\taco-computer-vision\\commands.txt"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="YOLOv8 Video Capture")
@@ -81,20 +51,11 @@ def main():
     args = parse_args()
     frame_width, frame_height = args.webcam_resolution
     frame_center_x = frame_width / 2
-    
+
     # Calculate center zone boundaries
     center_zone_width = frame_width * args.center_threshold
     center_left = frame_center_x - (center_zone_width / 2)
     center_right = frame_center_x + (center_zone_width / 2)
-
-    # Initialize robot if requested
-    robot_controller = None
-    if args.use_robot:
-        print("🤖 Robot control enabled")
-        print("   NOTE: Make sure robot_hub.py is already running on the hub!")
-        print("   Start it with: python -m pybricksdev run ble -n test robot_hub.py")
-        print("   This script will send movement commands via console output.")
-        robot_controller = "enabled"  # Simple flag for now
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
@@ -201,17 +162,16 @@ def main():
                         bbox_center_x = (x1 + x2) / 2
                         
                         if bbox_center_x < center_left:
-                            print("Look left")
-                            if robot_controller:
-                                # Send command that robot can receive
-                                print(f"ROBOT_CMD:SHOULDER:{-args.movement_step}")
-                                motor_shoulder.run_target(SPEED, -args.movement_step, Stop.HOLD, wait=True)
+                            cmd = 'SHOULDER_DOWN\n'
                         else:
-                            print("Look right")
-                            if robot_controller:
-                                # Send command that robot can receive
-                                print(f"ROBOT_CMD:SHOULDER:{args.movement_step}")
-                                motor_shoulder.run_target(SPEED, args.movement, Stop.HOLD, wait=True)
+                            cmd = 'SHOULDER_UP\n'
+
+                        # Emit the command to the file-based queue for robot_runner.py
+                        try:
+                            with open(COMMANDS_FILE_PATH, 'a', encoding='utf-8') as qf:
+                                qf.write(cmd)
+                        except Exception as e:
+                            print(f"Error writing commands file: {e}")
 
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
             if label:
@@ -235,12 +195,8 @@ def main():
     # end main loop
     cap.release()
     
-    # Shutdown message
-    if robot_controller:
-        print("ROBOT_CMD:STOP")
-
-
-
+    # Shutdown message (no hub process to stop in this flow)
+    pass
         
 
 if __name__ == "__main__":

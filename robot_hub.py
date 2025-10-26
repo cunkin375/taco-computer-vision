@@ -1,18 +1,21 @@
 """
 Robot hub program - runs ON the LEGO hub via pybricksdev.
-Performs calibration on startup, then listens for movement commands via BLE.
-
-Upload and run with:
-    python -m pybricksdev run ble -n test robot_hub.py
+Initializes and then waits for movement commands from a text file.
 """
 
 from pybricks.hubs import InventorHub
 from pybricks.pupdevices import Motor
 from pybricks.parameters import Port, Stop
 from pybricks.tools import wait
+# Add sys for stdin-based command streaming
+try:
+    import sys
+except ImportError:
+    sys = None
 
 # ---- Initialize hub ----
 hub = InventorHub()
+HUB_NAME = "test"
 
 # ---- Motors ----
 motor_base = Motor(Port.A)
@@ -21,19 +24,22 @@ motor_elbow = Motor(Port.C)
 motor_gripper = Motor(Port.F)
 
 # ---- Settings ----
-SPEED = 200
+SPEED = 300
+GRIPPER_CLOSE_SPEED = -200
+GRIPPER_OPEN_SPEED = 200
+GRIPPER_DUTY_LIMIT = 50
+POLL_INTERVAL = 1000  # milliseconds
 
 # ---- Motor bounds (degrees) ----
 SHOULDER_MIN = 0
 SHOULDER_MAX = 90
 BASE_MIN = -90
 BASE_MAX = 90
+ELBOW_MIN = 0
+ELBOW_MAX = 120
+GRIPPER_OPEN_ANGLE = 60
 
-# ---- Global state ----
-current_shoulder_angle = 0
-current_base_angle = 0
-
-# ---- Reset angles ----
+# ---- Reset angles on start ----
 motor_base.reset_angle(0)
 motor_shoulder.reset_angle(0)
 motor_elbow.reset_angle(0)
@@ -41,108 +47,81 @@ motor_gripper.reset_angle(0)
 
 print("Robot hub initialized!")
 
-# ---- Calibration and demo ----
-def calibrate():
-    """Run calibration movements to verify robot functionality."""
-    print("Running calibration demo...")
-    
-    # Base
-    print("Testing base rotation...")
-    motor_base.run_target(SPEED, 45, Stop.HOLD, wait=True)
-    wait(500)
-    print("Testing base rotation2...")
-    motor_base.run_target(SPEED, -45, Stop.HOLD, wait=True)
-    wait(500)
-    print("Testing base rotation3...")
-    motor_base.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    wait(500)
-    
-    # Shoulder
-    print("Testing shoulder movement...")
-    motor_shoulder.run_target(SPEED, 45, Stop.HOLD, wait=True)
-    wait(500)
-    motor_shoulder.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    wait(500)
-    
-    # Elbow
-    print("Testing elbow movement...")
-    motor_elbow.run_target(SPEED, 60, Stop.HOLD, wait=True)
-    wait(500)
-    motor_elbow.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    wait(500)
-    
-    # Gripper
-    print("Testing gripper...")
-    motor_gripper.run_target(SPEED, 30, Stop.HOLD, wait=True)
-    wait(500)
-    motor_gripper.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    wait(500)
-    
-    print("Calibration complete!")
+# ---- Incremental Movement Function ----
+def move_motor_by(motor, delta, min_angle, max_angle):
+    current_angle = motor.angle()
+    target_angle = current_angle + delta
+    if target_angle > max_angle: target_angle = max_angle
+    elif target_angle < min_angle: target_angle = min_angle
+    print(f"Moving motor from {current_angle} to {target_angle} deg")
+    motor.run_target(SPEED, target_angle, Stop.HOLD, wait=False)
 
-# ---- Movement functions ----
-def move_base(delta):
-    """Move base by delta degrees with bounds checking."""
-    global current_base_angle
-    target = current_base_angle + delta
+# ---- Command execution ----
+def execute_command(command):
+    command = command.strip()
+    if not command:
+        return
+    print(f"Executing command: {command}")
     
-    if target < BASE_MIN:
-        target = BASE_MIN
-        print(f"WARNING: Base at minimum ({BASE_MIN} degrees)")
-    elif target > BASE_MAX:
-        target = BASE_MAX
-        print(f"WARNING: Base at maximum ({BASE_MAX} degrees)")
-    
-    if target != current_base_angle:
-        motor_base.run_target(SPEED, target, Stop.HOLD, wait=False)
-        current_base_angle = target
-        print(f"Base -> {target} degrees")
+    try:
+        print("Executing command:")
+        if command.upper() == 'SHOULDER_UP':
+            print("Executing command: SHOULDER_UP")
+            move_motor_by(motor_shoulder, 10, SHOULDER_MIN, SHOULDER_MAX)
+        elif command.upper() == 'SHOULDER_DOWN':
+            print("Executing command: SHOULDER_DOWN")
+            move_motor_by(motor_shoulder, -10, SHOULDER_MIN, SHOULDER_MAX)
+        else:
+            parts = command.split(':')
+            if len(parts) >= 2:
+                motor_name = parts[0].upper()
+                try:
+                    delta = int(parts[1])
+                except Exception:
+                    print(f"Invalid delta in command '{command}'")
+                    return
+                
+                if motor_name == "BASE":
+                    move_motor_by(motor_base, delta, BASE_MIN, BASE_MAX)
+                elif motor_name == "SHOULDER":
+                    move_motor_by(motor_shoulder, delta, SHOULDER_MIN, SHOULDER_MAX)
+                elif motor_name == "ELBOW":
+                    move_motor_by(motor_elbow, delta, ELBOW_MIN, ELBOW_MAX)
+                elif motor_name == "GRIPPER":
+                    if delta > 0:
+                        print("Gripper: Opening")
+                        motor_gripper.run_target(GRIPPER_OPEN_SPEED, GRIPPER_OPEN_ANGLE, Stop.HOLD, wait=False)
+                    else:
+                        print("Gripper: Closing until stalled")
+                        motor_gripper.run_until_stalled(GRIPPER_CLOSE_SPEED, then=Stop.HOLD, duty_limit=GRIPPER_DUTY_LIMIT)
+                else:
+                    print(f"Unknown motor '{motor_name}'")
+            else:
+                print(f"Unrecognized command format: '{command}'")
+    except Exception as e:
+        print(f"Error processing command: {e}")
 
-def move_shoulder(delta):
-    """Move shoulder by delta degrees with bounds checking."""
-    global current_shoulder_angle
-    target = current_shoulder_angle + delta
-    
-    if target < SHOULDER_MIN:
-        target = SHOULDER_MIN
-        print(f"WARNING: Shoulder at minimum ({SHOULDER_MIN} degrees)")
-    elif target > SHOULDER_MAX:
-        target = SHOULDER_MAX
-        print(f"WARNING: Shoulder at maximum ({SHOULDER_MAX} degrees)")
-    
-    if target != current_shoulder_angle:
-        motor_shoulder.run_target(SPEED, target, Stop.HOLD, wait=False)
-        current_shoulder_angle = target
-        print(f"Shoulder → {target}°")
+# ---- Main loop: listen for commands from host via stdin ----
+if sys is not None and hasattr(sys, "stdin"):
+    print("Robot ready! Listening for commands from host (stdin)...")
+    try:
+        # Iterate over incoming lines from the host; each line is one command
+        for line in sys.stdin:
+            if not line:
+                # End of stream
+                break
+            execute_command(line)
+            # Small wait to keep the scheduler responsive
+            wait(10)
+    except KeyboardInterrupt:
+        pass
+else:
+    # Stdin not available on this runtime; cannot receive commands dynamically.
+    print("WARNING: sys.stdin is not available on this hub runtime. Cannot receive commands from host.")
 
-# ---- Run calibration ----
-calibrate()
-
-# ---- Command listener loop ----
-print("Robot ready! Waiting for camera commands...")
-print("Hub will stay connected. Press Ctrl+C on the PC to stop.")
-print("Listening for commands via stdin (format: MOTOR:DEGREES, e.g., BASE:5 or SHOULDER:-5)")
-
-"""
-# Keep the program running and listen for commands from stdin
-try:
-    while True:
-        # Note: pybricksdev doesn't easily support stdin reading in interactive mode
-        # Instead, we'll use a simple polling approach
-        # The bridge script will send commands that we can process
-        
-        # For now, just keep the connection alive
-        # Commands will be sent via pybricksdev's communication channel
-        wait(100)
-        
-        # In the future, this could be replaced with actual stdin reading
-        # when pybricksdev adds better support for it
-        
-except KeyboardInterrupt:
-    print("\nStopping robot...")
-    motor_base.stop()
-    motor_shoulder.stop()
-    motor_elbow.stop()
-    motor_gripper.stop()
-    print("Robot stopped")
-"""
+print("Stopping robot...")
+motor_base.stop()
+motor_shoulder.stop()
+motor_elbow.stop()
+motor_gripper.stop()
+print("Robot stopped")

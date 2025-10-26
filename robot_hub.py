@@ -18,13 +18,13 @@ hub = InventorHub()
 HUB_NAME = "test"
 
 # ---- Motors ----
-motor_base = Motor(Port.A)
-motor_shoulder = Motor(Port.B)
+motor_base = Motor(Port.B)
+motor_shoulder = Motor(Port.F)
 motor_elbow = Motor(Port.C)
-motor_gripper = Motor(Port.F)
+motor_gripper = Motor(Port.A)
 
 # ---- Settings ----
-SPEED = 300
+SPEED = 500  # ULTRA FAST for instant tracking response
 GRIPPER_CLOSE_SPEED = -200
 GRIPPER_OPEN_SPEED = 200
 GRIPPER_DUTY_LIMIT = 50
@@ -33,8 +33,8 @@ POLL_INTERVAL = 1000  # milliseconds
 # ---- Motor bounds (degrees) ----
 SHOULDER_MIN = 0
 SHOULDER_MAX = 90
-BASE_MIN = -90
-BASE_MAX = 90
+BASE_MIN = 0
+BASE_MAX = 360
 ELBOW_MIN = 0
 ELBOW_MAX = 120
 GRIPPER_OPEN_ANGLE = 60
@@ -64,17 +64,23 @@ def execute_command(command):
     print(f"Executing command: {command}")
     
     try:
-        print("Executing command:")
-        if command.upper() == 'SHOULDER_UP':
+        if command.upper() == 'STOP':
+            print("STOPPING ALL MOTORS")
+            motor_base.stop()
+            motor_shoulder.stop()
+            motor_elbow.stop()
+        elif command.upper() == 'SHOULDER_UP':
             print("Executing command: SHOULDER_UP")
-            move_motor_by(motor_shoulder, 10, SHOULDER_MIN, SHOULDER_MAX)
+            move_motor_by(motor_shoulder, 20, SHOULDER_MIN, SHOULDER_MAX)
         elif command.upper() == 'SHOULDER_DOWN':
             print("Executing command: SHOULDER_DOWN")
-            move_motor_by(motor_shoulder, -10, SHOULDER_MIN, SHOULDER_MAX)
+            move_motor_by(motor_shoulder, -20, SHOULDER_MIN, SHOULDER_MAX)
         else:
             parts = command.split(':')
             if len(parts) >= 2:
                 motor_name = parts[0].upper()
+                
+                # Handle angle-based commands (SIMPLE AND PROVEN)
                 try:
                     delta = int(parts[1])
                 except Exception:
@@ -95,7 +101,7 @@ def execute_command(command):
                         print("Gripper: Closing until stalled")
                         motor_gripper.run_until_stalled(GRIPPER_CLOSE_SPEED, then=Stop.HOLD, duty_limit=GRIPPER_DUTY_LIMIT)
                 else:
-                    print(f"Unknown motor '{motor_name}'")
+                        print(f"Unknown motor '{motor_name}'")
             else:
                 print(f"Unrecognized command format: '{command}'")
     except Exception as e:

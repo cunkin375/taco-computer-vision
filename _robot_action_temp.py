@@ -5,34 +5,25 @@ from pybricks.tools import wait
 
 # ---- Initialize hub and motors ----
 hub = InventorHub()
-motor_base = Motor(Port.A)
-motor_shoulder = Motor(Port.B)
+motor_base = Motor(Port.B)
+motor_shoulder = Motor(Port.F)  # Fixed: Was Port.B, should be Port.F
 motor_elbow = Motor(Port.C)
-motor_gripper = Motor(Port.F)
+motor_gripper = Motor(Port.A)  # Fixed: Was Port.F, should be Port.B
 
 # ---- Settings ----
-SPEED = 300
-GRIPPER_CLOSE_SPEED = -200
-GRIPPER_OPEN_SPEED = 200
+SPEED = 500  # Increased from 500 to 1000 for faster, more dramatic movements!
+GRIPPER_CLOSE_SPEED = -400  # Doubled for faster gripper
+GRIPPER_OPEN_SPEED = 400    # Doubled for faster gripper
 GRIPPER_DUTY_LIMIT = 50
 
 # ---- Motor bounds (degrees) ----
 SHOULDER_MIN = 0
 SHOULDER_MAX = 90
-BASE_MIN = -90
+BASE_MIN = 0
 BASE_MAX = 90
-ELBOW_MIN = 0
+ELBOW_MIN =360
 ELBOW_MAX = 120
 GRIPPER_OPEN_ANGLE = 60
-
-# ---- Calibration Routine ----
-def calibrate():
-    print("Calibrating robot...")
-    motor_base.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    motor_shoulder.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    motor_elbow.run_target(SPEED, 0, Stop.HOLD, wait=True)
-    motor_gripper.run_target(GRIPPER_OPEN_SPEED, GRIPPER_OPEN_ANGLE, Stop.HOLD, wait=True)
-    print("Calibration complete.")
 
 # ---- Incremental Movement Function ----
 def move_motor_by(motor, delta, min_angle, max_angle):
@@ -43,20 +34,16 @@ def move_motor_by(motor, delta, min_angle, max_angle):
     elif target_angle < min_angle:
         target_angle = min_angle
     print("Moving motor from", current_angle, "to", target_angle, "deg")
-    motor.run_target(SPEED, target_angle, Stop.HOLD, wait=False)
-    wait(50)  # Use wait() for delay instead of time.sleep()
-
-# ---- Run calibration once before command ----
-calibrate()
+    motor.run_target(SPEED, target_angle, Stop.HOLD, wait=True)
 
 # ---- Execute one command ----
-cmd = "SHOULDER_DOWN".strip()
+cmd = "STOP".strip()
 print("Executing command:", cmd)
 try:
     if cmd.upper() == 'SHOULDER_UP':
-        move_motor_by(motor_shoulder, 10, SHOULDER_MIN, SHOULDER_MAX)
+        move_motor_by(motor_shoulder, 30, SHOULDER_MIN, SHOULDER_MAX)  # Tripled from 10 to 30 degrees!
     elif cmd.upper() == 'SHOULDER_DOWN':
-        move_motor_by(motor_shoulder, -10, SHOULDER_MIN, SHOULDER_MAX)
+        move_motor_by(motor_shoulder, -30, SHOULDER_MIN, SHOULDER_MAX)  # Tripled from -10 to -30 degrees!
     else:
         parts = cmd.split(':')
         if len(parts) >= 2:

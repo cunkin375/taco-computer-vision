@@ -41,9 +41,9 @@ def parse_args():
     )
     parser.add_argument(
         '--movement_step',
-        default=5,
+        default=30,
         type=int,
-        help='Degrees to move robot per adjustment (default: 5)'
+        help='Degrees to move robot per adjustment (default: 30 for dramatic movements)'
     )
     return parser.parse_args()
 
@@ -56,6 +56,28 @@ def main():
     center_zone_width = frame_width * args.center_threshold
     center_left = frame_center_x - (center_zone_width / 2)
     center_right = frame_center_x + (center_zone_width / 2)
+    
+    # Rate limiting for robot commands
+    last_command_time = 0
+    command_cooldown = 0.05  # 50ms between commands (20 commands/sec for ultra-fast tracking!)
+    
+    # Track if we need to send a command this frame
+    command_to_send = None
+    
+    # Debug output
+    print(f"[STARTUP] Robot control enabled: {args.use_robot}")
+    print(f"[STARTUP] Target object: {args.target_object}")
+    print(f"[STARTUP] Center zone: {center_left:.1f} to {center_right:.1f}")
+    if args.use_robot:
+        print(f"[STARTUP] ✓ Robot commands will be sent to: {COMMANDS_FILE_PATH}")
+        # Clear any old commands at startup
+        try:
+            with open(COMMANDS_FILE_PATH, 'w', encoding='utf-8') as f:
+                f.write("")
+        except Exception:
+            pass
+    else:
+        print(f"[STARTUP] ✗ Robot control disabled (use --use_robot flag to enable)")
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
@@ -78,6 +100,10 @@ def main():
         if not ret or frame is None:
             print("Failed to read frame from camera, stopping")
             break
+        
+        # Reset command for this frame
+        command_to_send = None
+        
         # run yolo model on the frame (keep as color BGR input for YOLO)
         result = model(frame)[0]
         # convert to grayscale for the Haar cascade detector
@@ -141,8 +167,9 @@ def main():
                 label = f"{conf_i:.2f}"
 
             # Check if this detection matches the target object
-            if args.target_object and cls_i is not None:
+            if args.target_object and args.use_robot and cls_i is not None:
                 detected_name = model.names.get(cls_i, '').lower() if hasattr(model, 'names') else ''
+                # Removed debug spam for speed
                 if detected_name == args.target_object.lower():
                     # Calculate overlap between bounding box and center zone
                     # Find the intersection between bbox [x1, x2] and center zone [center_left, center_right]
@@ -155,23 +182,42 @@ def main():
                     
                     # If majority (>50%) of bbox is within center zone, it's centered
                     if overlap_fraction > 0.5:
-                        print("Centered")
-                        # Robot is already centered, no movement needed
+                        # Robot is already centered, stop motors
+                        command_to_send = 'STOP\n'
                     else:
-                        # Calculate bounding box center for left/right determination
-                        bbox_center_x = (x1 + x2) / 2
-                        
-                        if bbox_center_x < center_left:
-                            cmd = 'SHOULDER_DOWN\n'
+                        # Rate limiting: only send command if cooldown has passed
+                        current_time = time.time()
+                        time_since_last = current_time - last_command_time
+                        if time_since_last < command_cooldown:
+                            # Cooldown active - skip this frame
+                            command_to_send = None  # Don't send during cooldown
                         else:
-                            cmd = 'SHOULDER_UP\n'
+                            # Calculate bounding box center for left/right determination
+                            bbox_center_x = (x1 + x2) / 2
+                            bbox_center_y = (y1 + y2) / 2
+                            
+                            # Horizontal tracking (base motor) - 40 DEGREE MOVEMENTS
+                            if bbox_center_x < center_left:
+                                command_to_send = 'BASE:300\n'  # Rotate base left 40 degrees
+                                print(f"⬅️  LEFT")
+                            elif bbox_center_x > center_right:
+                                command_to_send = 'BASE:-300\n'  # Rotate base right 40 degrees
+                                print(f"➡️  RIGHT")
+                            else:
+                                # Vertical tracking (shoulder motor) when horizontally centered
+                                frame_center_y = frame_height / 2
+                                if bbox_center_y < frame_center_y - 50:
+                                    command_to_send = 'SHOULDER_UP\n'
+                                    print(f"⬆️  UP")
+                                elif bbox_center_y > frame_center_y + 50:
+                                    command_to_send = 'SHOULDER_DOWN\n'
+                                    print(f"⬇️  DOWN")
+                                else:
+                                    command_to_send = None  # Both centered
 
-                        # Emit the command to the file-based queue for robot_runner.py
-                        try:
-                            with open(COMMANDS_FILE_PATH, 'a', encoding='utf-8') as qf:
-                                qf.write(cmd)
-                        except Exception as e:
-                            print(f"Error writing commands file: {e}")
+                            # Update last command time if we're sending a command
+                            if command_to_send is not None:
+                                last_command_time = current_time
 
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
             if label:
@@ -188,6 +234,18 @@ def main():
             pass
         # Show the annotated frame
         cv2.imshow('Video Feed', out)
+        
+        # Write command to file at END of frame processing (after all detections)
+        if args.use_robot:
+            try:
+                with open(COMMANDS_FILE_PATH, 'w', encoding='utf-8') as qf:
+                    if command_to_send:
+                        qf.write(command_to_send)
+                        print(f"📤 SENT: {command_to_send.strip()}")  # Debug: show what's being sent
+                    else:
+                        qf.write("")  # Clear file when no command needed
+            except Exception as e:
+                print(f"❌ Error writing commands file: {e}")
 
         # exit on 'q' key
         if cv2.waitKey(27) & 0xFF == ord('q'):

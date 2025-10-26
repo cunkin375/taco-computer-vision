@@ -1,7 +1,6 @@
 import argparse
 import cv2
 import os
-import robot
 
 import supervision as sv
 from ultralytics import YOLO
@@ -31,6 +30,17 @@ def parse_args():
         type=float,
         help='Fraction of frame width for center zone (default: 0.2 = 20%% of width centered)'
     )
+    parser.add_argument(
+        '--use_robot',
+        action='store_true',
+        help='Enable robot motor control (requires robot_controller module and connected hardware)'
+    )
+    parser.add_argument(
+        '--movement_step',
+        default=5,
+        type=int,
+        help='Degrees to move robot per adjustment (default: 5)'
+    )
     return parser.parse_args()
 
 def main():
@@ -42,6 +52,15 @@ def main():
     center_zone_width = frame_width * args.center_threshold
     center_left = frame_center_x - (center_zone_width / 2)
     center_right = frame_center_x + (center_zone_width / 2)
+
+    # Initialize robot if requested
+    robot_controller = None
+    if args.use_robot:
+        print("🤖 Robot control enabled")
+        print("   NOTE: Make sure robot_hub.py is already running on the hub!")
+        print("   Start it with: python -m pybricksdev run ble -n test robot_hub.py")
+        print("   This script will send movement commands via console output.")
+        robot_controller = "enabled"  # Simple flag for now
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
@@ -142,14 +161,21 @@ def main():
                     # If majority (>50%) of bbox is within center zone, it's centered
                     if overlap_fraction > 0.5:
                         print("Centered")
+                        # Robot is already centered, no movement needed
                     else:
                         # Calculate bounding box center for left/right determination
                         bbox_center_x = (x1 + x2) / 2
                         
                         if bbox_center_x < center_left:
                             print("Look left")
+                            if robot_controller:
+                                # Send command that robot can receive
+                                print(f"ROBOT_CMD:SHOULDER:{-args.movement_step}")
                         else:
                             print("Look right")
+                            if robot_controller:
+                                # Send command that robot can receive
+                                print(f"ROBOT_CMD:SHOULDER:{args.movement_step}")
 
             cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
             if label:
@@ -172,6 +198,10 @@ def main():
             break
     # end main loop
     cap.release()
+    
+    # Shutdown message
+    if robot_controller:
+        print("ROBOT_CMD:STOP")
 
 
 
